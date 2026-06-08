@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>World Cup 2026 Schedule</title>
+  <title>2026 FIFA World Cup Predictions</title>
+  <link rel="icon" type="image/x-icon" href="torist_logo_ 1.png">
   <style>
     :root {
       color-scheme: light;
@@ -249,6 +250,7 @@
       min-width: 28px;
       font-size: 0.85rem;
       color: #0f352d;
+      font-weight: 500;
     }
 
     .score-grid th {
@@ -307,6 +309,53 @@
       border: 1px solid #a6d8bb;
     }
 
+    .matrix-axis-labels {
+      display: flex;
+      justify-content: center;
+      padding: 0 0 8px 0;
+    }
+
+    .axis-x-label {
+      text-align: center;
+      font-size: 0.95rem;
+      color: #153d32;
+      letter-spacing: 0.01em;
+    }
+
+    .axis-x-label strong {
+      font-weight: 700;
+    }
+
+    .matrix-with-y-axis {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .matrix-axis-y-label {
+      display: flex;
+      align-items: center;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-size: 0.95rem;
+      color: #153d32;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      margin-top: 12px;
+      word-spacing: 0.3em;
+    }
+
+    .matrix-axis-y-label strong {
+      font-weight: 700;
+      margin-right: 0.2em;
+    }
+
+    .score-grid th.axis-label {
+      font-weight: 700;
+      background: #f2faf6;
+      color: #153d32;
+    }
+
     .empty,
     .error {
       padding: 28px;
@@ -328,8 +377,8 @@
   <div class="page">
     <header>
       <div>
-        <h1>World Cup 2026 Schedule</h1>
-        <p>Minimal schedule viewer that loads the official match list from <code>world_cup_104_schedule.json</code>.</p>
+        <h1>2026 FIFA World Cup Predictions</h1>
+        <p>Match by match predictions based on historical data and the Dixon-Coles model. Click each match to view goal probabilities.</p>
       </div>
       <div class="toolbar">
         <input id="search" type="search" placeholder="Search by team, group, or date" />
@@ -347,6 +396,7 @@
     const searchEl = document.getElementById('search');
     const downloadBtn = document.getElementById('download');
     let scheduleData = [];
+    let predictionsMap = {};
 
     function parseLocalDate(value) {
       const [datePart, timePart] = value.split(' ');
@@ -377,10 +427,25 @@
       return Math.min(max, Math.max(min, value));
     }
 
+    function getPredictions(home, away) {
+      const key = `${home}|${away}`;
+      return predictionsMap[key] || null;
+    }
+
     function getPlaceholderProbabilities(game) {
-      const home = (game.home_team_name_en || game.home_team || '').toLowerCase();
-      const away = (game.away_team_name_en || game.away_team || '').toLowerCase();
-      const seed = (home.length - away.length) * 0.02 + (((home.charCodeAt(0) || 65) - (away.charCodeAt(0) || 65)) / 200);
+      const home = game.home_team_name_en || game.home_team || 'Home';
+      const away = game.away_team_name_en || game.away_team || 'Away';
+      const prediction = getPredictions(home, away);
+      if (prediction) {
+        return {
+          homeWin: Math.round(prediction.probabilities.home_win * 100),
+          draw: Math.round(prediction.probabilities.draw * 100),
+          awayWin: Math.round(prediction.probabilities.away_win * 100)
+        };
+      }
+      const homeLen = home.length;
+      const awayLen = away.length;
+      const seed = (homeLen - awayLen) * 0.02 + (((home.charCodeAt(0) || 65) - (away.charCodeAt(0) || 65)) / 200);
       let homeWin = clamp(0.32 + seed, 0.18, 0.55);
       let awayWin = clamp(0.32 - seed, 0.18, 0.55);
       let draw = 1 - homeWin - awayWin;
@@ -405,14 +470,16 @@
       return gap >= 2 ? 'medium' : 'low';
     }
 
-    function renderScoreMatrix(home, away) {
+    function renderScoreMatrix(home, away, matrix = null) {
       const headerCells = Array.from({ length: 6 }, (_, value) => `<th>${value}</th>`).join('');
       const rows = Array.from({ length: 6 }, (_, homeGoals) => {
         const cells = Array.from({ length: 6 }, (_, awayGoals) => {
           const cellClass = matrixCellClass(homeGoals, awayGoals);
-          return `<td class="cell ${cellClass}" aria-label="${homeGoals}-${awayGoals} score probability"></td>`;
+          const value = matrix ? matrix[homeGoals][awayGoals] : null;
+          const cellContent = value !== null ? `${(value * 100).toFixed(1)}%` : '';
+          return `<td class="cell ${cellClass}" aria-label="${homeGoals}-${awayGoals} score probability">${cellContent}</td>`;
         }).join('');
-        return `<tr><th>${homeGoals}</th>${cells}</tr>`;
+        return `<tr><th class="axis-label">${homeGoals}</th>${cells}</tr>`;
       }).join('');
 
       return `
@@ -425,15 +492,25 @@
           </div>
 
           <div class="matrix-grid-wrapper">
-            <table class="score-grid">
-              <thead>
-                <tr>
-                  <th></th>
-                  ${headerCells}
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
+            <div class="matrix-axis-labels">
+              <div class="axis-x-label">
+                <strong>${away}</strong> goals (away)
+              </div>
+            </div>
+            <div class="matrix-with-y-axis">
+              <div class="matrix-axis-y-label">
+                <strong>${home}</strong> goals (home)
+              </div>
+              <table class="score-grid">
+                <thead>
+                  <tr>
+                    <th></th>
+                    ${headerCells}
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
 
             <div class="matrix-legend">
               <strong>Heat map key</strong>
@@ -461,6 +538,8 @@
           const timeDisplay = (game.local_date || game.date || '').split(' ')[1] || '';
           const label = game.group ? `${game.group.toUpperCase()} • ${game.type || 'group'}` : game.type || '';
           const probability = getPlaceholderProbabilities(game);
+          const prediction = getPredictions(home, away);
+          const matrix = prediction ? prediction.matrix : null;
 
           return `
             <div class="match" role="button" tabindex="0" aria-expanded="false">
@@ -477,7 +556,7 @@
                 </div>
                 <div class="meta"><span>${label}</span></div>
               </div>
-              ${renderScoreMatrix(home, away)}
+              ${renderScoreMatrix(home, away, matrix)}
             </div>
           `;
         }).join('');
@@ -509,13 +588,24 @@
 
     async function loadSchedule() {
       try {
-        const response = await fetch('world_cup_104_schedule.json');
-        if (!response.ok) throw new Error('Unable to load schedule JSON');
-        const data = await response.json();
-        scheduleData = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
+        const scheduleResponse = await fetch('world_cup_104_schedule.json');
+        if (!scheduleResponse.ok) throw new Error('Unable to load schedule JSON');
+        const scheduleJsonData = await scheduleResponse.json();
+        scheduleData = Array.isArray(scheduleJsonData.games) ? scheduleJsonData.games : (Array.isArray(scheduleJsonData) ? scheduleJsonData : []);
+
+        const predictionsResponse = await fetch('world_cup_match_predictions.json');
+        if (predictionsResponse.ok) {
+          const predictions = await predictionsResponse.json();
+          predictions.forEach(pred => {
+            const key = `${pred.home_team}|${pred.away_team}`;
+            predictionsMap[key] = pred;
+          });
+        }
+
         renderSchedule(scheduleData);
+
         downloadBtn.addEventListener('click', () => {
-          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const blob = new Blob([JSON.stringify(scheduleJsonData, null, 2)], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
