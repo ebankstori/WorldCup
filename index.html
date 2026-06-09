@@ -86,6 +86,146 @@
       filter: brightness(1.05);
     }
 
+    .page-nav {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      border: 1px solid #d8e4df;
+      border-radius: 14px;
+      background: white;
+      color: #0f2622;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+    }
+
+    .tab:hover {
+      transform: translateY(-1px);
+    }
+
+    .tab.active {
+      background: #1d8a6f;
+      color: white;
+      border-color: #1d8a6f;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .bet-controls {
+      display: grid;
+      grid-template-columns: 100px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .bet-controls input,
+    .bet-controls select {
+      width: 100%;
+      border: 1px solid #d8e4df;
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: white;
+      color: #0f2622;
+      font-size: 0.95rem;
+    }
+
+    .bet-controls .bet-button {
+      background: #1d8a6f;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 11px 14px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .bet-controls .bet-button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .bet-summary {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #eef7f1;
+      border: 1px solid #d8e4df;
+      color: #174834;
+      font-size: 0.95rem;
+    }
+
+    .slopcoin-summary {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .balance-panel {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      padding: 18px;
+      border-radius: 20px;
+      background: white;
+      border: 1px solid #ddeae6;
+    }
+
+    .balance-panel p {
+      margin: 0;
+      color: #58786e;
+      font-size: 0.95rem;
+    }
+
+    .balance-panel strong {
+      font-size: 1.6rem;
+      color: #153d32;
+    }
+
+    .slopcoin-note {
+      color: #4f6c65;
+      font-size: 0.95rem;
+    }
+
+    .bet-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .bet-card {
+      padding: 16px;
+      border-radius: 18px;
+      background: white;
+      border: 1px solid #ddeae6;
+      box-shadow: 0 16px 32px rgba(17, 39, 35, 0.04);
+    }
+
+    .bet-card strong {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 6px;
+      color: #153d32;
+    }
+
+    .bet-details {
+      display: grid;
+      gap: 6px;
+      color: #4f6c65;
+      font-size: 0.94rem;
+    }
+
+    .bet-details span {
+      display: inline-flex;
+      gap: 6px;
+    }
+
     main {
       display: grid;
       gap: 16px;
@@ -384,19 +524,274 @@
         <input id="search" type="search" placeholder="Search by team, group, or date" />
         <button id="download">Download schedule</button>
       </div>
+      <div class="page-nav">
+        <button id="matchesTab" class="tab active" type="button">Matches</button>
+        <button id="slopcoinTab" class="tab" type="button">Slopcoin</button>
+      </div>
     </header>
 
-    <main id="schedule">
-      <div class="empty">Loading schedule…</div>
+    <main class="pages">
+      <section id="matches-page" class="page-panel">
+        <div id="schedule">
+          <div class="empty">Loading schedule…</div>
+        </div>
+      </section>
+      <section id="slopcoin-page" class="page-panel hidden">
+        <div class="slopcoin-summary">
+          <div class="balance-panel">
+            <p>Your slopcoin balance</p>
+            <strong id="slopBalance">1000</strong>
+          </div>
+          <div class="slopcoin-note">Place bets on matches and review your active bets here.</div>
+        </div>
+        <div id="betList" class="bet-list"></div>
+      </section>
     </main>
   </div>
 
   <script>
     const scheduleEl = document.getElementById('schedule');
+    const matchesTab = document.getElementById('matchesTab');
+    const slopcoinTab = document.getElementById('slopcoinTab');
+    const matchesPage = document.getElementById('matches-page');
+    const slopcoinPage = document.getElementById('slopcoin-page');
+    const slopBalanceEl = document.getElementById('slopBalance');
+    const betListEl = document.getElementById('betList');
     const searchEl = document.getElementById('search');
     const downloadBtn = document.getElementById('download');
     let scheduleData = [];
     let predictionsMap = {};
+    let slopBalance = 1000;
+    let bets = {};
+
+    const STORAGE_BALANCE = 'slopcoin_balance';
+    const STORAGE_BETS = 'slopcoin_bets';
+
+    function loadSlopData() {
+      const storedBalance = localStorage.getItem(STORAGE_BALANCE);
+      const storedBets = localStorage.getItem(STORAGE_BETS);
+
+      if (storedBalance !== null && !Number.isNaN(Number(storedBalance))) {
+        slopBalance = Number(storedBalance);
+      }
+
+      if (storedBets) {
+        try {
+          bets = JSON.parse(storedBets) || {};
+        } catch {
+          bets = {};
+        }
+      }
+    }
+
+    function saveSlopData() {
+      localStorage.setItem(STORAGE_BALANCE, String(slopBalance));
+      localStorage.setItem(STORAGE_BETS, JSON.stringify(bets));
+    }
+
+    function formatAmount(value) {
+      return Math.round(value * 100) / 100;
+    }
+
+    function switchPage(page) {
+      const isMatches = page === 'matches';
+      matchesPage.classList.toggle('hidden', !isMatches);
+      slopcoinPage.classList.toggle('hidden', isMatches);
+      matchesTab.classList.toggle('active', isMatches);
+      slopcoinTab.classList.toggle('active', !isMatches);
+      searchEl.parentElement.style.display = isMatches ? 'flex' : 'none';
+      downloadBtn.style.display = isMatches ? 'inline-flex' : 'none';
+      if (!isMatches) {
+        renderSlopcoinPage();
+      }
+    }
+
+    function setSlopBalance(value) {
+      slopBalance = value;
+      slopBalanceEl.textContent = formatAmount(slopBalance);
+      saveSlopData();
+    }
+
+    function createBetId(game) {
+      return game.id || `${game.home_team_name_en || game.home_team}|${game.away_team_name_en || game.away_team}|${game.local_date || game.date}`;
+    }
+
+    function getProbabilityLabel(choice, home, away) {
+      if (choice === 'home') return home;
+      if (choice === 'away') return away;
+      return 'draw';
+    }
+
+    function calculatePayout(amount, choice, probabilities) {
+      if (choice === 'home') {
+        return amount * (1 + (probabilities.away_win || 0));
+      }
+      if (choice === 'away') {
+        return amount * (1 + (probabilities.home_win || 0));
+      }
+      return amount * (1 + (probabilities.draw || 0));
+    }
+
+    function renderSlopcoinPage() {
+      slopBalanceEl.textContent = formatAmount(slopBalance);
+      const betEntries = Object.values(bets);
+      if (betEntries.length === 0) {
+        betListEl.innerHTML = '<div class="empty">No bets placed yet.</div>';
+        return;
+      }
+
+      betListEl.innerHTML = betEntries.map(bet => `
+        <div class="bet-card">
+          <strong>${bet.home_team} vs ${bet.away_team}</strong>
+          <div class="bet-details">
+            <span><strong>Amount:</strong> ${formatAmount(bet.amount)} slopcoins</span>
+            <span><strong>Bet:</strong> ${getProbabilityLabel(bet.choice, bet.home_team, bet.away_team)}</span>
+            <span><strong>Potential return:</strong> ${formatAmount(bet.potentialPayout)} slopcoins</span>
+            <span><strong>Placed:</strong> ${new Date(bet.placedAt).toLocaleString()}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function handlePlaceBet(button) {
+      const amountEl = button.closest('.bet-controls').querySelector('.bet-amount');
+      const choiceEl = button.closest('.bet-controls').querySelector('.bet-choice');
+      const amount = Number(amountEl.value);
+      const choice = choiceEl.value;
+      const home = button.dataset.home;
+      const away = button.dataset.away;
+      const gameId = button.dataset.gameId;
+      const scoreKey = button.dataset.scoreKey;
+      const prediction = getPredictions(home, away);
+
+      if (!prediction) {
+        alert('Prediction not available for this match.');
+        return;
+      }
+      if (!amount || amount <= 0) {
+        alert('Enter a valid slopcoin amount.');
+        return;
+      }
+      if (amount > slopBalance) {
+        alert('Not enough slopcoins to place that bet.');
+        return;
+      }
+
+      const payout = calculatePayout(amount, choice, prediction.probabilities);
+      const betId = scoreKey || gameId || `${home}|${away}|${prediction.local_date || ''}`;
+      bets[betId] = {
+        id: betId,
+        home_team: home,
+        away_team: away,
+        amount,
+        choice,
+        probabilities: prediction.probabilities,
+        potentialPayout: payout,
+        placedAt: new Date().toISOString()
+      };
+
+      setSlopBalance(slopBalance - amount);
+      saveSlopData();
+      renderSchedule(scheduleData);
+    }
+
+    function attachBetHandlers() {
+      document.querySelectorAll('.bet-button').forEach(button => {
+        button.addEventListener('click', () => handlePlaceBet(button));
+      });
+    }
+
+    function getPredictionForDisplay(game) {
+      const home = game.home_team_name_en || game.home_team || 'Home';
+      const away = game.away_team_name_en || game.away_team || 'Away';
+      return getPredictions(home, away);
+    }
+
+    function renderBetSection(game, probability, betId) {
+      const bet = bets[betId];
+      if (bet) {
+        return `<div class="bet-summary">Bet placed: ${formatAmount(bet.amount)} slopcoins on ${getProbabilityLabel(bet.choice, bet.home_team, bet.away_team)}. Potential return ${formatAmount(bet.potentialPayout)} slopcoins.</div>`;
+      }
+      return `
+        <div class="bet-controls">
+          <input class="bet-amount" type="number" min="1" placeholder="Amount" />
+          <select class="bet-choice">
+            <option value="home">${game.home_team_name_en || game.home_team}</option>
+            <option value="draw">Draw</option>
+            <option value="away">${game.away_team_name_en || game.away_team}</option>
+          </select>
+          <button class="bet-button" type="button" data-home="${game.home_team_name_en || game.home_team}" data-away="${game.away_team_name_en || game.away_team}" data-game-id="${game.id || ''}" data-score-key="${betId}">Place bet</button>
+        </div>
+      `;
+    }
+
+    function renderSchedule(items) {
+      if (!items || items.length === 0) {
+        scheduleEl.innerHTML = '<div class="empty">No matches found.</div>';
+        return;
+      }
+
+      const groups = groupByDate(items);
+      scheduleEl.innerHTML = groups.map(group => {
+        const matches = group.games.map(game => {
+          const home = game.home_team_name_en || game.home_team || 'Home';
+          const away = game.away_team_name_en || game.away_team || 'Away';
+          const dateDisplay = formatDay(game.local_date || game.date || '');
+          const timeDisplay = (game.local_date || game.date || '').split(' ')[1] || '';
+          const label = game.group ? `${game.group.toUpperCase()} • ${game.type || 'group'}` : game.type || '';
+          const probability = getPlaceholderProbabilities(game);
+          const betId = createBetId(game);
+          const prediction = getPredictionForDisplay(game);
+          const matrix = prediction ? prediction.matrix : null;
+
+          return `
+            <div class="match" role="button" tabindex="0" aria-expanded="false">
+              <div class="teams">
+                <div class="team">${home}</div>
+                <div class="team">${away}</div>
+              </div>
+              <div class="info">
+                <strong>${timeDisplay || 'TBD'}</strong>
+                <div class="probabilities">
+                  <span>Home win ${probability.homeWin}%</span>
+                  <span>Draw ${probability.draw}%</span>
+                  <span>Away win ${probability.awayWin}%</span>
+                </div>
+                <div class="meta"><span>${label}</span></div>
+                ${renderBetSection(game, probability, betId)}
+              </div>
+              ${renderScoreMatrix(home, away, matrix)}
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <section class="day-card">
+            <h2>${formatDay(group.date)}</h2>
+            <p class="summary">${group.games.length} match${group.games.length === 1 ? '' : 'es'} scheduled</p>
+            <div class="matches">${matches}</div>
+          </section>
+        `;
+      }).join('');
+
+      scheduleEl.querySelectorAll('.match').forEach(matchEl => {
+        matchEl.addEventListener('click', event => {
+          if (event.target.closest('.bet-controls')) return;
+          const isExpanded = matchEl.classList.toggle('expanded');
+          matchEl.setAttribute('aria-expanded', isExpanded);
+        });
+
+        matchEl.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            const isExpanded = matchEl.classList.toggle('expanded');
+            matchEl.setAttribute('aria-expanded', isExpanded);
+          }
+        });
+      });
+
+      attachBetHandlers();
+    }
 
     function parseLocalDate(value) {
       const [datePart, timePart] = value.split(' ');
@@ -523,69 +918,6 @@
       `;
     }
 
-    function renderSchedule(items) {
-      if (!items || items.length === 0) {
-        scheduleEl.innerHTML = '<div class="empty">No matches found.</div>';
-        return;
-      }
-
-      const groups = groupByDate(items);
-      scheduleEl.innerHTML = groups.map(group => {
-        const matches = group.games.map(game => {
-          const home = game.home_team_name_en || game.home_team || 'Home';
-          const away = game.away_team_name_en || game.away_team || 'Away';
-          const dateDisplay = formatDay(game.local_date || game.date || '');
-          const timeDisplay = (game.local_date || game.date || '').split(' ')[1] || '';
-          const label = game.group ? `${game.group.toUpperCase()} • ${game.type || 'group'}` : game.type || '';
-          const probability = getPlaceholderProbabilities(game);
-          const prediction = getPredictions(home, away);
-          const matrix = prediction ? prediction.matrix : null;
-
-          return `
-            <div class="match" role="button" tabindex="0" aria-expanded="false">
-              <div class="teams">
-                <div class="team">${home}</div>
-                <div class="team">${away}</div>
-              </div>
-              <div class="info">
-                <strong>${timeDisplay || 'TBD'}</strong>
-                <div class="probabilities">
-                  <span>Home win ${probability.homeWin}%</span>
-                  <span>Draw ${probability.draw}%</span>
-                  <span>Away win ${probability.awayWin}%</span>
-                </div>
-                <div class="meta"><span>${label}</span></div>
-              </div>
-              ${renderScoreMatrix(home, away, matrix)}
-            </div>
-          `;
-        }).join('');
-
-        return `
-          <section class="day-card">
-            <h2>${formatDay(group.date)}</h2>
-            <p class="summary">${group.games.length} match${group.games.length === 1 ? '' : 'es'} scheduled</p>
-            <div class="matches">${matches}</div>
-          </section>
-        `;
-      }).join('');
-
-      scheduleEl.querySelectorAll('.match').forEach(matchEl => {
-        matchEl.addEventListener('click', () => {
-          const isExpanded = matchEl.classList.toggle('expanded');
-          matchEl.setAttribute('aria-expanded', isExpanded);
-        });
-
-        matchEl.addEventListener('keydown', event => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            const isExpanded = matchEl.classList.toggle('expanded');
-            matchEl.setAttribute('aria-expanded', isExpanded);
-          }
-        });
-      });
-    }
-
     async function loadSchedule() {
       try {
         const scheduleResponse = await fetch('world_cup_104_schedule.json');
@@ -602,7 +934,9 @@
           });
         }
 
+        loadSlopData();
         renderSchedule(scheduleData);
+        switchPage('matches');
 
         downloadBtn.addEventListener('click', () => {
           const blob = new Blob([JSON.stringify(scheduleJsonData, null, 2)], { type: 'application/json' });
@@ -633,6 +967,9 @@
       });
       renderSchedule(filtered);
     });
+
+    matchesTab.addEventListener('click', () => switchPage('matches'));
+    slopcoinTab.addEventListener('click', () => switchPage('slopcoin'));
 
     loadSchedule();
   </script>
